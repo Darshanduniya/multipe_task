@@ -1,0 +1,38 @@
+from airflow import DAG
+from airflow.decorators import task
+from airflow.utils.dates import days_ago
+
+# Define default arguments
+default_args = {
+    'owner': 'airflow',
+    'start_date': days_ago(1),
+}
+
+# Define the DAG
+with DAG(
+    'parallel_task_more_than_60',
+    default_args=default_args,
+    schedule_interval=None,
+    catchup=False,
+) as dag:
+
+    # Task to return a list of more than 60 items
+    @task
+    def get_large_item_list():
+        # Creating a list of 100 items to simulate processing more than 60 parallel tasks
+        return [f'item_{i}' for i in range(1, 101)]  # List from item_1 to item_100
+
+    # Task to process each item in parallel
+    @task
+    def process_large_item(item):
+        # This is where the processing of each item would happen
+        print(f"Processing {item}")
+    
+    # Define the task that returns the large item list
+    get_items_task = get_large_item_list()
+
+    # Process each item in parallel (more than 60 tasks)
+    process_items_task = process_large_item.expand(item=get_items_task)
+
+    # Set the dependencies
+    get_items_task >> process_items_task
