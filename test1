@@ -1,5 +1,5 @@
 from airflow import DAG
-from airflow.decorators import task
+from airflow.operators.python import PythonOperator
 from airflow.utils.dates import days_ago
 
 # Define default arguments
@@ -9,30 +9,38 @@ default_args = {
 }
 
 # Define the DAG
-with DAG(
+dag = DAG(
     'parallel_task_more_than_60',
     default_args=default_args,
     schedule_interval=None,
     catchup=False,
-) as dag:
+)
 
-    # Task to return a list of more than 60 items
-    @task
-    def get_large_item_list():
-        # Creating a list of 100 items to simulate processing more than 60 parallel tasks
-        return [f'item_{i}' for i in range(1, 101)]  # List from item_1 to item_100
+# Task to return a list of more than 60 items
+def get_large_item_list(**kwargs):
+    # Creating a list of 100 items to simulate processing more than 60 parallel tasks
+    return [f'item_{i}' for i in range(1, 101)]  # List from item_1 to item_100
 
-    # Task to process each item in parallel
-    @task
-    def process_large_item(item):
-        # This is where the processing of each item would happen
-        print(f"Processing {item}")
-    
-    # Define the task that returns the large item list
-    get_items_task = get_large_item_list()
+# Task to process each item in parallel
+def process_large_item(item):
+    # This is where the processing of each item would happen
+    print(f"Processing {item}")
 
-    # Process each item in parallel (more than 60 tasks)
-    process_items_task = process_large_item.expand(item=get_items_task)
+# Define the task that returns the large item list
+get_items_task = PythonOperator(
+    task_id='get_large_item_list',
+    python_callable=get_large_item_list,
+    provide_context=True,
+    dag=dag,
+)
 
-    # Set the dependencies
-    get_items_task >> process_items_task
+# Process each item in parallel (more than 60 tasks)
+process_items_task = PythonOperator(
+    task_id='process_large_items',
+    python_callable=process_large_item,
+    op_kwargs={'item': '{{ task_instance.xcom_pull(task_ids="get_large_item_list") }}'},
+    dag=dag,
+)
+
+# Set the dependencies
+get_items_task >> process_items_task
